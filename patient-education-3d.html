@@ -17,6 +17,8 @@
   #menu { position: fixed; inset: 0; overflow: auto; padding: 40px 16px; background: rgba(6, 20, 26, .72); backdrop-filter: blur(6px); }
   #menu .inner { max-width: 1100px; margin: 0 auto; }
   #menu h1 { font-size: clamp(28px, 4vw, 44px); margin: 0 0 6px; }
+  #menu .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  #menu .head .btn { flex: none; margin-top: 6px; }
   #menu p { color: var(--muted); margin: 0 0 28px; font-size: 19px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
   .card { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 18px; padding: 22px;
@@ -60,7 +62,10 @@
 
 <section id="menu">
   <div class="inner">
-    <h1>Understanding your treatment</h1>
+    <div class="head">
+      <h1>Understanding your treatment</h1>
+      <button class="btn" id="fullscreen" hidden>Full screen</button>
+    </div>
     <p>Tap a topic to watch a short explanation. Your doctor will answer any questions.</p>
     <div class="grid" id="grid"></div>
     <div class="credit">Tooth models: University of Dundee, School of Dentistry — <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></div>
@@ -2714,6 +2719,18 @@ $('play').onclick = () => { playing = !playing; $('play').textContent = playing 
 $('next').onclick = () => go(idx + 1);
 $('prev').onclick = () => go(idx - 1);
 $('back').onclick = () => { topic = null; document.body.classList.remove('playing'); $('menu').style.display = ''; };
+{   // full screen for the waiting-room screen; hidden where the browser can't do it (iPhone)
+  const el = document.documentElement, fsBtn = $('fullscreen');
+  const current = () => document.fullscreenElement || document.webkitFullscreenElement;
+  if (el.requestFullscreen || el.webkitRequestFullscreen) fsBtn.hidden = false;
+  fsBtn.onclick = () => {
+    if (current()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+  };
+  const label = () => { fsBtn.textContent = current() ? 'Exit full screen' : 'Full screen'; };
+  document.addEventListener('fullscreenchange', label);
+  document.addEventListener('webkitfullscreenchange', label);
+}
 document.addEventListener('keydown', e => {
   if (!topic) return;
   if (e.key === 'ArrowRight') go(idx + 1);
@@ -3240,7 +3257,7 @@ renderer.setAnimationLoop(() => {
     rebuildLining(P, S < 2 ? 0 : S === 2 ? lc.left : cleared, S < 2 ? 0 : S === 2 ? lc.right : cleared);
 
     // the laser seals the pocket so the gum can reattach
-    const seal = S === 3 ? smooth(0.35, 0.8, p) : S > 3 ? 1 - smooth(0.2, 0.7, p) : 0;
+    const seal = S === 3 ? smooth(0.35, 0.8, p) : S === 4 ? 1 - smooth(0.2, 0.7, p) : 0;   // gone for good once healed
     clotMat.opacity = Math.max(0, seal) * 0.95;
     clots.forEach(c => {
       c.visible = clotMat.opacity > 0.02;
