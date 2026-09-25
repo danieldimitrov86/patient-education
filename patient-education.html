@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patient Education Player</title>
+<style>
+  :root {
+    --bg: #eef5f7; --panel: #ffffff; --ink: #16323d; --muted: #5b7680;
+    --accent: #1b8a9e; --accent-soft: #d3eef2; --gum: #e9868f; --bone: #ecdcc0;
+    --enamel: #fbfaf5; --root: #efe3c8; --decay: #6b4a2e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--ink); font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button { font: inherit; cursor: pointer; }
+
+  /* Menu */
+  #menu { max-width: 1100px; margin: 0 auto; padding: 32px 16px; }
+  #menu h1 { font-size: clamp(26px, 4vw, 40px); margin: 0 0 6px; }
+  #menu p { color: var(--muted); margin: 0 0 28px; font-size: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 2px solid transparent; border-radius: 18px; padding: 22px; text-align: left;
+          color: var(--ink); box-shadow: 0 2px 10px rgba(0,0,0,.05); transition: border-color .2s, transform .2s; }
+  .card:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  .card b { display: block; font-size: 21px; margin-bottom: 6px; }
+  .card span { color: var(--muted); font-size: 15px; }
+  .card:disabled { opacity: .5; cursor: default; }
+
+  /* Player */
+  #player { display: none; height: 100%; flex-direction: column; }
+  #player.open { display: flex; }
+  .topbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+  .topbar h2 { margin: 0; font-size: clamp(20px, 3vw, 30px); flex: 1; }
+  .btn { background: var(--panel); border: 0; border-radius: 12px; padding: 10px 16px; color: var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .stagewrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 16px; }
+  svg.stage { height: 100%; max-height: 62vh; width: 100%; }
+  .caption { padding: 8px 16px 12px; text-align: center; min-height: 150px; }
+  .caption .step { color: var(--accent); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; font-size: clamp(14px, 1.8vw, 18px); }
+  .caption .text { font-size: clamp(22px, 3.2vw, 38px); line-height: 1.3; max-width: 1100px; margin: 6px auto 0; transition: opacity .4s; }
+  .progress { display: flex; gap: 6px; padding: 0 16px 16px; }
+  .progress div { flex: 1; height: 6px; border-radius: 3px; background: #cfdde1; overflow: hidden; }
+  .progress i { display: block; height: 100%; width: 0; background: var(--accent); }
+
+  /* Scene elements */
+  .el { transition: opacity 1.2s ease, transform 1.6s cubic-bezier(.3,.8,.3,1); }
+  .enamel, .decay, .numb, .temp, .crown, .scan, .spark, .dust, .core, .label { opacity: 0; }
+  .show-enamel .enamel, .show-decay .decay, .show-numb .numb, .show-core .core,
+  .show-temp .temp, .show-crown .crown, .show-scan .scan, .show-spark .spark, .show-dust .dust { opacity: 1; }
+  .temp, .crown { transform: translateY(-220px); }
+  .show-temp .temp, .show-crown .crown { transform: translateY(0); }
+  .decay { transform-origin: 215px 150px; transform: scale(.4); }
+  .show-decay .decay { transform: scale(1); transition-duration: 1.2s, 4s; }
+  .numb circle { animation: pulse 2s infinite; transform-origin: center; transform-box: fill-box; }
+  .scan rect { animation: sweep 2.4s ease-in-out infinite alternate; }
+  .spark path { animation: twinkle 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+  .spark path:nth-child(2) { animation-delay: .5s; } .spark path:nth-child(3) { animation-delay: 1s; }
+  .dust circle { animation: dust 1.2s linear infinite; }
+  .dust circle:nth-child(2n) { animation-delay: .4s; } .dust circle:nth-child(3n) { animation-delay: .8s; }
+  @keyframes pulse { 0% { transform: scale(.6); opacity: .9 } 100% { transform: scale(1.8); opacity: 0 } }
+  @keyframes sweep { from { transform: translateY(0) } to { transform: translateY(190px) } }
+  @keyframes twinkle { 0%,100% { transform: scale(.3); opacity: 0 } 50% { transform: scale(1); opacity: 1 } }
+  @keyframes dust { from { transform: translate(0,0); opacity: 1 } to { transform: translate(40px,-50px); opacity: 0 } }
+  @media (prefers-reduced-motion: reduce) { .el { transition-duration: .01s } }
+</style>
+</head>
+<body>
+
+<section id="menu">
+  <h1>Understanding your treatment</h1>
+  <p>Tap a topic to watch a short explanation. Your doctor will answer any questions.</p>
+  <div class="grid" id="grid"></div>
+</section>
+
+<section id="player">
+  <div class="topbar">
+    <button class="btn" id="back">← Topics</button>
+    <h2 id="ptitle"></h2>
+    <button class="btn" id="prev">◀</button>
+    <button class="btn primary" id="play">Pause</button>
+    <button class="btn" id="next">▶</button>
+  </div>
+  <div class="stagewrap">
+    <svg class="stage" id="stage" viewBox="0 0 400 480" aria-hidden="true">
+      <defs>
+        <linearGradient id="gEnamel" x1="0" x2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e9e4d6"/></linearGradient>
+        <linearGradient id="gCrown" x1="0" x2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#f4f1e8"/><stop offset="1" stop-color="#dcd6c6"/></linearGradient>
+        <linearGradient id="gScan" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#3fd0e6" stop-opacity="0"/><stop offset=".5" stop-color="#3fd0e6" stop-opacity=".8"/><stop offset="1" stop-color="#3fd0e6" stop-opacity="0"/></linearGradient>
+      </defs>
+      <!-- bone (back) -->
+      <rect x="0" y="300" width="400" height="180" fill="var(--bone)"/>
+      <!-- roots -->
+      <path fill="var(--root)" stroke="#cdb98f" stroke-width="2"
+        d="M140,240 L260,240 L246,400 C243,428 222,430 218,402 L206,305 C203,290 197,290 194,305 L182,402 C178,430 157,428 154,400 Z"/>
+      <!-- prepared tooth core -->
+      <path class="el core" fill="#f1e6cc" stroke="#cdb98f" stroke-width="2"
+        d="M150,252 L146,162 Q146,140 170,140 L230,140 Q254,140 254,162 L250,252 Z"/>
+      <!-- original crown of the tooth -->
+      <g class="el enamel">
+        <path fill="url(#gEnamel)" stroke="#cfc6b0" stroke-width="2"
+          d="M132,252 L130,125 C130,82 170,72 200,88 C230,72 270,82 270,125 L268,252 Z"/>
+      </g>
+      <g class="el decay">
+        <path fill="var(--decay)" opacity=".85" d="M200,105 C225,95 255,110 250,140 C246,168 215,178 198,160 C182,145 182,112 200,105 Z"/>
+        <path fill="none" stroke="#4a3320" stroke-width="3" stroke-linecap="round" d="M178,95 L188,130 L176,160 L186,200"/>
+      </g>
+      <!-- drilling dust -->
+      <g class="el dust" fill="#d9d2c0">
+        <circle cx="255" cy="120" r="4"/><circle cx="262" cy="140" r="3"/><circle cx="248" cy="105" r="3"/>
+        <circle cx="140" cy="120" r="3"/><circle cx="150" cy="100" r="4"/><circle cx="258" cy="160" r="3"/>
+      </g>
+      <!-- temporary crown -->
+      <path class="el temp" fill="#cfc8b8" stroke="#a9a08c" stroke-width="2"
+        d="M136,252 L134,128 C134,90 172,82 200,96 C228,82 266,90 266,128 L264,252 Z"/>
+      <!-- final crown -->
+      <g class="el crown">
+        <path fill="url(#gCrown)" stroke="#c9c0a8" stroke-width="2"
+          d="M132,252 L130,125 C130,82 170,72 200,88 C230,72 270,82 270,125 L268,252 Z"/>
+        <path fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".9" d="M150,120 C150,105 160,97 172,96"/>
+      </g>
+      <!-- gum (front, translucent) -->
+      <path fill="var(--gum)" opacity=".82"
+        d="M0,265 C60,255 110,250 130,258 C160,270 240,270 270,258 C290,250 340,255 400,265 L400,320 L0,320 Z"/>
+      <!-- bone (front, translucent) -->
+      <path fill="var(--bone)" opacity=".55" d="M0,318 C120,305 280,305 400,318 L400,480 L0,480 Z"/>
+      <!-- numbing -->
+      <g class="el numb" fill="none" stroke="#3a9fe0" stroke-width="4">
+        <circle cx="110" cy="285" r="22"/><circle cx="290" cy="285" r="22"/>
+      </g>
+      <!-- scanner -->
+      <g class="el scan"><rect x="110" y="70" width="180" height="18" fill="url(#gScan)"/></g>
+      <!-- sparkle -->
+      <g class="el spark" fill="#f5c542">
+        <path d="M300,80 l6,16 16,6 -16,6 -6,16 -6,-16 -16,-6 16,-6z"/>
+        <path d="M95,130 l4,11 11,4 -11,4 -4,11 -4,-11 -11,-4 11,-4z"/>
+        <path d="M315,190 l4,10 10,4 -10,4 -4,10 -4,-10 -10,-4 10,-4z"/>
+      </g>
+    </svg>
+  </div>
+  <div class="caption">
+    <div class="step" id="pstep"></div>
+    <div class="text" id="ptext"></div>
+  </div>
+  <div class="progress" id="progress"></div>
+</section>
+
+<script>
+// Each topic = list of scenes. Each scene: which layers are visible + caption + seconds.
+const TOPICS = [
+  { id: 'crown', title: 'Dental Crowns', blurb: 'A protective cap for a damaged tooth', scenes: [
+    { show: ['enamel','decay'], label: 'The problem', secs: 9,
+      text: 'This tooth is badly damaged — from a large cavity, a crack, or an old filling that is breaking down. A regular filling can no longer hold it together.' },
+    { show: ['enamel','decay','numb'], label: 'Step 1 · Getting comfortable', secs: 7,
+      text: 'First, the area is numbed so you stay comfortable throughout the procedure.' },
+    { show: ['core','dust'], label: 'Step 2 · Shaping the tooth', secs: 9,
+      text: 'The damaged part is removed and the tooth is gently shaped so the crown can fit over it.' },
+    { show: ['core','scan'], label: 'Step 3 · Measuring', secs: 8,
+      text: 'A scan or impression records the exact shape of your tooth and your bite, so your crown fits precisely.' },
+    { show: ['core','temp'], label: 'Step 4 · Temporary crown', secs: 8,
+      text: 'A temporary crown protects your tooth while your custom crown is being made.' },
+    { show: ['core','crown'], label: 'Step 5 · Your new crown', secs: 9,
+      text: 'The permanent crown is bonded in place, covering the whole visible part of the tooth like a cap.' },
+    { show: ['core','crown','spark'], label: 'The result', secs: 10,
+      text: 'Your tooth is protected, strong, and looks natural. With good brushing, flossing, and checkups, a crown can last many years.' },
+  ]},
+  { id: 'cleaning', title: 'Deep Cleaning', blurb: 'Scaling and root planing' },
+  { id: 'perio', title: 'Periodontal Disease', blurb: 'What gum disease is and why it matters' },
+  { id: 'implant', title: 'Dental Implants', blurb: 'Replacing a missing tooth from the root up' },
+  { id: 'bridge', title: 'Dental Bridge', blurb: 'Filling a gap using neighboring teeth' },
+  { id: 'invisalign', title: 'Invisalign', blurb: 'Straightening teeth with clear aligners' },
+  { id: 'laser', title: 'Laser Procedure', blurb: 'Gentle laser treatment for gums' },
+  { id: 'nightlase', title: 'NightLase', blurb: 'Laser therapy to reduce snoring' },
+];
+
+const $ = id => document.getElementById(id);
+const grid = $('grid');
+TOPICS.forEach(t => {
+  const b = document.createElement('button');
+  b.className = 'card';
+  b.disabled = !t.scenes;
+  b.innerHTML = `<b>${t.title}</b><span>${t.scenes ? t.blurb : 'Coming soon'}</span>`;
+  b.onclick = () => open(t);
+  grid.appendChild(b);
+});
+
+let topic, idx = 0, playing = true, elapsed = 0, last = 0, raf;
+
+function open(t) {
+  topic = t; idx = 0; playing = true;
+  $('menu').style.display = 'none';
+  $('player').classList.add('open');
+  $('ptitle').textContent = t.title;
+  $('progress').innerHTML = t.scenes.map(() => '<div><i></i></div>').join('');
+  go(0);
+  last = performance.now(); cancelAnimationFrame(raf); raf = requestAnimationFrame(tick);
+}
+
+function go(i) {
+  const scenes = topic.scenes;
+  idx = (i + scenes.length) % scenes.length;   // loops back to the start
+  elapsed = 0;
+  const s = scenes[idx];
+  $('stage').setAttribute('class', 'stage ' + s.show.map(x => 'show-' + x).join(' '));
+  const txt = $('ptext');
+  txt.style.opacity = 0;
+  setTimeout(() => { txt.textContent = s.text; $('pstep').textContent = s.label; txt.style.opacity = 1; }, 250);
+  [...$('progress').children].forEach((d, j) => d.firstChild.style.width = j < idx ? '100%' : '0');
+}
+
+function tick(now) {
+  const dt = (now - last) / 1000; last = now;
+  if (playing && topic) {
+    elapsed += dt;
+    const s = topic.scenes[idx];
+    $('progress').children[idx].firstChild.style.width = Math.min(100, elapsed / s.secs * 100) + '%';
+    if (elapsed >= s.secs) go(idx + 1);
+  }
+  raf = requestAnimationFrame(tick);
+}
+
+$('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'Pause' : 'Play'; };
+$('next').onclick = () => go(idx + 1);
+$('prev').onclick = () => go(idx - 1);
+$('back').onclick = () => { topic = null; $('player').classList.remove('open'); $('menu').style.display = ''; };
+document.addEventListener('keydown', e => {
+  if (!topic) return;
+  if (e.key === 'ArrowRight') go(idx + 1);
+  if (e.key === 'ArrowLeft') go(idx - 1);
+  if (e.key === ' ') { e.preventDefault(); $('play').click(); }
+});
+</script>
+</body>
+</html>
