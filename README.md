@@ -1,9 +1,9 @@
 # Patient Education
 
-Animated patient-education pages for the dental office.
+Animated 3D patient-education player for the dental office.
 
 - `patient-education-3d.html`: the 3D player (Three.js). It covers crowns, deep cleaning, implants, bridges, Invisalign, laser treatment and NightLase. It is a single self-contained file; open it in a browser with an internet connection, because Three.js loads from a CDN.
-- `patient-education.html`: the earlier 2D version.
+- `index.html`: forwards to the 3D player, so the site's plain address works on GitHub Pages.
 
 ## Credits
 
